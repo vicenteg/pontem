@@ -28,20 +28,70 @@ import com.google.cloud.pontem.model.WorkloadResult;
 import com.google.cloud.pontem.result.JsonResultProcessor;
 import com.google.cloud.pontem.result.JsonResultProcessorFactory;
 import com.google.common.base.Preconditions;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import static spark.Spark.*;
+
 
 /** Tool to Benchmark BigQuery Workloads */
 public final class BigQueryWorkloadTester {
 
   private static final Logger logger = Logger.getLogger(BigQueryWorkloadTester.class.getName());
 
-  /** Main entry point for benchmark. Sets up the object graph and kicks-off execution. */
-  public static void main(String[] args) {
-    logger.info("Welcome to BigQuery Workload Tester!");
+  private static String results = "";
+  private static String getResults() {
+      return results;
+  }
 
+  private static String runWorkloadsWithConfiguration(String configYaml) {
+    logger.info("Loading config from string: " + configYaml);
+    Configuration.loadConfigFromString(configYaml);
+    Configuration config = Configuration.getInstance();
+    BigQueryCredentialManager bigQueryCredentialManager = new BigQueryCredentialManager();
+
+    logger.info("Starting execution");
+    results = "";
+    try {
+      for (WorkloadSettings workload : config.getWorkloads()) {
+        BigQueryBackend bigQueryBackend =
+                BigQueryBackendFactory.getBigQueryBackend(bigQueryCredentialManager, workload);
+        ConcurrentWorkloadRunnerFactory runnerFactory =
+                new ConcurrentWorkloadRunnerFactory(bigQueryBackend);
+        Benchmark benchmark = getBenchmark(config, runnerFactory);
+
+        int concurrencyLevel = config.getConcurrencyLevel();
+        Preconditions.checkArgument(
+                concurrencyLevel > 0, "Concurrency Level must be higher than 0!");
+        List<WorkloadResult> workloadResults = benchmark.run(workload, concurrencyLevel);
+
+        logger.info("Finished benchmarking phase, processing results");
+        String outputPath =
+                config.getOutputFileFolder() + File.separator + workload.getOutputFileName();
+        JsonResultProcessor jsonResultProcessor =
+                JsonResultProcessorFactory.getJsonResultProcessor();
+        jsonResultProcessor.run(outputPath, workloadResults);
+        Path path = Paths.get(outputPath);
+        List<String> lines = Files.readAllLines(path);
+        for (String line: lines) {
+          results = results.concat(line);
+        }
+      }
+    } catch (Throwable t) {
+      logger.log(Level.SEVERE, "Caught Exception while executing the Workload Benchmark: ", t);
+    }
+    return results;
+  }
+
+  private static String runWorkloads() {
     logger.info("Loading config");
     Configuration.loadConfig("config.yaml");
     Configuration config = Configuration.getInstance();
@@ -61,17 +111,35 @@ public final class BigQueryWorkloadTester {
             concurrencyLevel > 0, "Concurrency Level must be higher than 0!");
         List<WorkloadResult> workloadResults = benchmark.run(workload, concurrencyLevel);
 
-        logger.info("Finished bechmarking phase, processing results");
+        logger.info("Finished benchmarking phase, processing results");
         String outputPath =
             config.getOutputFileFolder() + File.separator + workload.getOutputFileName();
         JsonResultProcessor jsonResultProcessor =
             JsonResultProcessorFactory.getJsonResultProcessor();
         jsonResultProcessor.run(outputPath, workloadResults);
+        Path path = Paths.get(outputPath);
+        List<String> lines = Files.readAllLines(path);
+        for (String line: lines) {
+          results = results.concat(line);
+        }
       }
     } catch (Throwable t) {
       logger.log(Level.SEVERE, "Caught Exception while executing the Workload Benchmark: ", t);
     }
+    return results;
+  }
 
+  /** Main entry point for benchmark. Sets up the object graph and kicks-off execution. */
+  public static void main(String[] args) {
+    logger.info("Welcome to BigQuery Workload Tester!");
+    staticFiles.location("/ux/dist");
+    get("/results", (req, res) -> getResults());
+    get("/run", (req, res) -> runWorkloads());
+    post("/run", (req, res) -> {
+      JsonParser p = new JsonParser();
+      JsonElement e = p.parse(req.body());
+      return runWorkloadsWithConfiguration(e.getAsJsonObject().get("configuration").getAsString());
+    }) ;
     logger.info("Finished Workload Tester execution");
   }
 

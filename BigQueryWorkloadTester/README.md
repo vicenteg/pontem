@@ -184,6 +184,12 @@ Below are the noteworthy fields for a Workload Result:
         query.
 *   **Runtime:** The sum of Query Result's runtimes.
 
+#### Web App
+
+A simple web app is included. Currently it provides an HTTP endpoint that can be used to trigger
+a run of your workload. A companion front end application that will enable configuration
+and display results is also available.
+
 ## Support
 
 While this is not an officially supported Google product, we encourage you to

@@ -52,23 +52,22 @@ public final class Configuration {
     return Configuration.instance;
   }
 
-  /**
-   * Load the Configuration specified at fileName
-   *
-   * @return boolean did this load succeed?
-   */
-  public static boolean loadConfig(String filename) {
+  public static String getConfigYamlFromResourceFile(String filename) {
     try {
       String configYaml =
           Resources.toString(Resources.getResource(filename), Charset.defaultCharset());
 
-      Yaml yaml = new Yaml();
-      yaml.setBeanAccess(BeanAccess.FIELD);
-      instance = yaml.loadAs(configYaml, Configuration.class);
+      return configYaml;
 
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  public static boolean loadConfigFromString(String configYaml) {
+    Yaml yaml = new Yaml();
+    yaml.setBeanAccess(BeanAccess.FIELD);
+    instance = yaml.loadAs(configYaml, Configuration.class);
 
     List<WorkloadSettings> filteredWorkloads = new ArrayList<>();
     for (WorkloadSettings workload : instance.workloads) {
@@ -84,6 +83,16 @@ public final class Configuration {
     instance.workloads = filteredWorkloads;
 
     return true;
+  }
+
+  /**
+   * Load the Configuration specified at fileName
+   *
+   * @return boolean did this load succeed?
+   */
+  public static boolean loadConfig(String filename) {
+    String configYaml = getConfigYamlFromResourceFile(filename);
+    return loadConfigFromString(configYaml);
   }
 
   public Integer getConcurrencyLevel() {
