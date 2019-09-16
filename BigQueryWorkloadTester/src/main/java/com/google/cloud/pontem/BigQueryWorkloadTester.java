@@ -78,11 +78,8 @@ public final class BigQueryWorkloadTester {
         Preconditions.checkArgument(
                 concurrencyLevel > 0, "Concurrency Level must be higher than 0!");
         workloadResults.addAll(benchmark.run(workload, concurrencyLevel));
-        logger.info(gson.toJson(workloadResults));
-
 
         logger.info("Finished benchmarking phase.");
-        // String workloadResultsJson = gson.toJson(workloadResults);
 
         if (!workload.getOutputFileName().isEmpty()) {
           logger.info("processing results. Writing to '" + workload.getOutputFileName() + "'");
