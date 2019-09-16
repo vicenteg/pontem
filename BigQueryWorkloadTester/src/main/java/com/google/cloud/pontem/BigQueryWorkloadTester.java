@@ -65,6 +65,7 @@ public final class BigQueryWorkloadTester {
 
     logger.info("Starting execution");
     results = "";
+    List<WorkloadResult> workloadResults = new ArrayList<>();
     try {
       for (WorkloadSettings workload : config.getWorkloads()) {
         BigQueryBackend bigQueryBackend =
@@ -76,11 +77,12 @@ public final class BigQueryWorkloadTester {
         int concurrencyLevel = config.getConcurrencyLevel();
         Preconditions.checkArgument(
                 concurrencyLevel > 0, "Concurrency Level must be higher than 0!");
-        List<WorkloadResult> workloadResults = benchmark.run(workload, concurrencyLevel);
+        workloadResults.addAll(benchmark.run(workload, concurrencyLevel));
+        logger.info(gson.toJson(workloadResults));
 
 
         logger.info("Finished benchmarking phase.");
-        String workloadResultsJson = gson.toJson(workloadResults);
+        // String workloadResultsJson = gson.toJson(workloadResults);
 
         if (!workload.getOutputFileName().isEmpty()) {
           logger.info("processing results. Writing to '" + workload.getOutputFileName() + "'");
@@ -90,8 +92,8 @@ public final class BigQueryWorkloadTester {
               JsonResultProcessorFactory.getJsonResultProcessor();
           jsonResultProcessor.run(outputPath, workloadResults);
         }
-        results = workloadResultsJson;
       }
+      results = gson.toJson(workloadResults);
     } catch (Throwable t) {
       logger.log(Level.SEVERE, "Caught Exception while executing the Workload Benchmark: ", t);
       FailedRun.Builder failedRunBuilder = FailedRun.newBuilder();
