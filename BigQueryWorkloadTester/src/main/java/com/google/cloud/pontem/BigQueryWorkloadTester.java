@@ -24,7 +24,6 @@ import com.google.cloud.pontem.benchmark.backends.BigQueryBackendFactory;
 import com.google.cloud.pontem.benchmark.runners.ConcurrentWorkloadRunnerFactory;
 import com.google.cloud.pontem.config.Configuration;
 import com.google.cloud.pontem.config.WorkloadSettings;
-import com.google.cloud.pontem.model.FailedRun;
 import com.google.cloud.pontem.model.WorkloadResult;
 import com.google.cloud.pontem.result.JsonResultProcessor;
 import com.google.cloud.pontem.result.JsonResultProcessorFactory;
@@ -93,13 +92,6 @@ public final class BigQueryWorkloadTester {
       results = gson.toJson(workloadResults);
     } catch (Throwable t) {
       logger.log(Level.SEVERE, "Caught Exception while executing the Workload Benchmark: ", t);
-      FailedRun.Builder failedRunBuilder = FailedRun.newBuilder();
-      List<String> stacktraceString = new ArrayList<>();
-      for (StackTraceElement e: t.getStackTrace()) {
-        stacktraceString.add(e.toString());
-      }
-      failedRunBuilder.setException(t);
-      results = gson.toJson(failedRunBuilder.build());
     }
     return results;
   }
@@ -143,13 +135,6 @@ public final class BigQueryWorkloadTester {
       }
     } catch (Throwable t) {
       logger.log(Level.SEVERE, "Caught Exception while executing the Workload Benchmark: ", t);
-      FailedRun.Builder failedRunBuilder = FailedRun.newBuilder();
-      List<String> stacktraceString = new ArrayList<>();
-      for (StackTraceElement e: t.getStackTrace()) {
-        stacktraceString.add(e.toString());
-      }
-      failedRunBuilder.setException(t);
-      results = gson.toJson(failedRunBuilder.build());
     }
     return results;
   }
@@ -169,7 +154,15 @@ public final class BigQueryWorkloadTester {
     post("/run", (req, res) -> {
       JsonParser p = new JsonParser();
       JsonElement e = p.parse(req.body());
-      return runWorkloadsWithConfiguration(e.getAsJsonObject().get("configuration").getAsString());
+      String configuration = e.getAsJsonObject().get("configuration").getAsString();
+
+      try {
+        return runWorkloadsWithConfiguration(configuration);
+      } catch (Exception ex) {
+        logger.severe(ex.getMessage());
+        res.status(400);
+      }
+      return res;
     }) ;
     logger.info("Finished Workload Tester execution");
   }

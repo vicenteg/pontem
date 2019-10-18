@@ -67,21 +67,27 @@ public final class Configuration {
   public static boolean loadConfigFromString(String configYaml) {
     Yaml yaml = new Yaml();
     yaml.setBeanAccess(BeanAccess.FIELD);
-    instance = yaml.loadAs(configYaml, Configuration.class);
-
-    List<WorkloadSettings> filteredWorkloads = new ArrayList<>();
-    for (WorkloadSettings workload : instance.workloads) {
-      if (workload != null) {
-        // Eagerly read queries to ensure the loading does not affect the benchmark reads.
-        workload.getQueries();
-        filteredWorkloads.add(workload);
-      } else {
-        logger.warning("This configuration has empty workloads");
-      }
+    try {
+      instance = yaml.loadAs(configYaml, Configuration.class);
+      logger.info(instance == null ? "instance == null": instance.toString());
+    } catch (Exception e) {
+      logger.severe(e.getClass().toString());
     }
 
-    instance.workloads = filteredWorkloads;
+    if (instance != null) {
+      List<WorkloadSettings> filteredWorkloads = new ArrayList<>();
+      for (WorkloadSettings workload : instance.workloads) {
+        if (workload != null) {
+          // Eagerly read queries to ensure the loading does not affect the benchmark reads.
+          workload.getQueries();
+          filteredWorkloads.add(workload);
+        } else {
+          logger.warning("This configuration has empty workloads");
+        }
+      }
 
+      instance.workloads = filteredWorkloads;
+    }
     return true;
   }
 
