@@ -33,6 +33,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -56,7 +57,7 @@ public final class BigQueryWorkloadTester {
   }
   private static Gson gson = new Gson();
 
-  private static String runWorkloadsWithConfiguration(String configYaml) {
+  private static String runWorkloadsWithConfiguration(String configYaml) throws IOException {
     logger.info("Loading config from string: " + configYaml);
     Configuration.loadConfigFromString(configYaml);
     Configuration config = Configuration.getInstance();
@@ -65,34 +66,25 @@ public final class BigQueryWorkloadTester {
     logger.info("Starting execution");
     results = "";
     List<WorkloadResult> workloadResults = new ArrayList<>();
-    try {
-      for (WorkloadSettings workload : config.getWorkloads()) {
-        BigQueryBackend bigQueryBackend =
-                BigQueryBackendFactory.getBigQueryBackend(bigQueryCredentialManager, workload);
-        ConcurrentWorkloadRunnerFactory runnerFactory =
-                new ConcurrentWorkloadRunnerFactory(bigQueryBackend);
-        Benchmark benchmark = getBenchmark(config, runnerFactory);
+    for (WorkloadSettings workload : config.getWorkloads()) {
+      BigQueryBackend bigQueryBackend = BigQueryBackendFactory.getBigQueryBackend(bigQueryCredentialManager, workload);
+      ConcurrentWorkloadRunnerFactory runnerFactory = new ConcurrentWorkloadRunnerFactory(bigQueryBackend);
+      Benchmark benchmark = getBenchmark(config, runnerFactory);
 
-        int concurrencyLevel = config.getConcurrencyLevel();
-        Preconditions.checkArgument(
-                concurrencyLevel > 0, "Concurrency Level must be higher than 0!");
-        workloadResults.addAll(benchmark.run(workload, concurrencyLevel));
+      int concurrencyLevel = config.getConcurrencyLevel();
+      Preconditions.checkArgument(concurrencyLevel > 0, "Concurrency Level must be higher than 0!");
+      workloadResults.addAll(benchmark.run(workload, concurrencyLevel));
 
-        logger.info("Finished benchmarking phase.");
+      logger.info("Finished benchmarking phase.");
 
-        if (!workload.getOutputFileName().isEmpty()) {
-          logger.info("processing results. Writing to '" + workload.getOutputFileName() + "'");
-          String outputPath =
-              config.getOutputFileFolder() + File.separator + workload.getOutputFileName();
-          JsonResultProcessor jsonResultProcessor =
-              JsonResultProcessorFactory.getJsonResultProcessor();
-          jsonResultProcessor.run(outputPath, workloadResults);
-        }
+      if (!workload.getOutputFileName().isEmpty()) {
+        logger.info("processing results. Writing to '" + workload.getOutputFileName() + "'");
+        String outputPath = config.getOutputFileFolder() + File.separator + workload.getOutputFileName();
+        JsonResultProcessor jsonResultProcessor = JsonResultProcessorFactory.getJsonResultProcessor();
+        jsonResultProcessor.run(outputPath, workloadResults);
       }
-      results = gson.toJson(workloadResults);
-    } catch (Throwable t) {
-      logger.log(Level.SEVERE, "Caught Exception while executing the Workload Benchmark: ", t);
     }
+    results = gson.toJson(workloadResults);
     return results;
   }
 
@@ -155,15 +147,24 @@ public final class BigQueryWorkloadTester {
       JsonParser p = new JsonParser();
       JsonElement e = p.parse(req.body());
       String configuration = e.getAsJsonObject().get("configuration").getAsString();
+      String output = new String();
 
       try {
         return runWorkloadsWithConfiguration(configuration);
       } catch (Exception ex) {
         logger.severe(ex.getMessage());
+        res.body(ex.getMessage());
         res.status(400);
+        output = ex.getMessage();
+        halt(400, ex.getMessage());
       }
-      return res;
+      return output;
     }) ;
+    exception(IllegalArgumentException.class, (e, req, res) -> {
+      logger.severe("Exception: " + e.getMessage());
+      res.status(400);
+      res.body(gson.toJson(e));
+    });
     logger.info("Finished Workload Tester execution");
   }
 
