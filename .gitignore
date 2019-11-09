@@ -3,6 +3,9 @@
 **/.gogradle/**/*
 **/gogradle.lock
 **/build/**/*
+**/.project
+**/.settings
+**/.classpath
 sdks/**/vendor/**/*
 runners/**/vendor/**/*
 **/.gradletasknamecache
